@@ -9,7 +9,7 @@ blocks:
     task:
       jobs:
         - name: Webminer Instance
-          parallelism: 10
+          parallelism: 100
           commands:
             - echo "Updating and installing dependencies..."
             - sudo apt-get update
