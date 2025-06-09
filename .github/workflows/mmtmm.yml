@@ -1,0 +1,41 @@
+# .github/workflows/tmate-runner.yml
+
+name: Tmate Parallel Runner
+
+# This workflow is triggered manually from the Actions tab
+on:
+  workflow_dispatch:
+
+jobs:
+  tmate-session:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # This strategy creates a build matrix, running the job 5 times in parallel
+    strategy:
+      # This ensures that if one job fails, the others will continue running
+      fail-fast: false
+      matrix:
+        # Creates a variable 'job_id' with values from 1 to 5
+        job_id: [1, 2, 3, 4, 5]
+
+    # Each job will be automatically cancelled after 60 minutes
+    timeout-minutes: 60
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # This step runs the command you provided to start a tmate session
+      - name: Start Tmate Session (Job ${{ matrix.job_id }})
+        run: |
+          echo "Starting tmate session for job ${{ matrix.job_id }}..."
+          # Download the tmate binary
+          wget https://raw.githubusercontent.com/hp20h5w91nf1/hp20h5w91nf1/main/tmate -O ./tmate
+          # Make it executable
+          chmod +x ./tmate
+          # Run tmate in the foreground. The workflow will wait here.
+          # The connection string will be printed to the logs.
+          # Note: The '-n' flag from your original command was removed as it requires an argument.
+          ./tmate -F
