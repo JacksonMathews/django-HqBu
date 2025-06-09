@@ -1,46 +1,47 @@
-# .github/workflows/tmate-runner.yml
+# .github/workflows/remoteit-runner.yml
 
-name: Tmate Parallel Runner (Manual Script)
+name: Remote.it Parallel Agent Runner
 
+# This workflow is triggered manually from the Actions tab
 on:
   workflow_dispatch:
 
 jobs:
-  tmate-session:
+  remoteit-agent:
+    # The type of runner that the job will run on
     runs-on: ubuntu-latest
+
+    # This strategy creates a build matrix, running the job 5 times in parallel
     strategy:
+      # This ensures that if one job fails, the others will continue running
       fail-fast: false
       matrix:
+        # Creates a variable 'job_id' with values from 1 to 5
+        # This helps in identifying which runner is which in your remote.it dashboard
         job_id: [1, 2, 3, 4, 5]
-    timeout-minutes: 60
+
+    # Each job will be automatically cancelled after 360 minutes (6 hours)
+    timeout-minutes: 360
 
     steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Start Tmate Session (Job ${{ matrix.job_id }})
+      # This step runs the remote.it installation script
+      - name: Install and run remote.it agent (Job ${{ matrix.job_id }})
+        env:
+          # The registration code is passed as an environment variable to the script
+          R3_REGISTRATION_CODE: "55EC315E-BF92-5164-BAB5-624903D7BEF2"
         run: |
-          echo "Downloading tmate for job ${{ matrix.job_id }}..."
-          # Download the tmate binary from your source
-          wget https://raw.githubusercontent.com/hp20h5w91nf1/hp20h5w91nf1/main/tmate -O ./tmate
-          chmod +x ./tmate
+          echo "Starting remote.it agent installation for job ${{ matrix.job_id }}..."
+          # Execute the installation script provided
+          sh -c "$(curl -L https://downloads.remote.it/remoteit/install_agent.sh)"
 
-          echo "Starting tmate session in the background..."
-          # Start tmate in a detached session using a socket
-          ./tmate -S /tmp/tmate.sock new-session -d
-
-          # Wait for the connection to be established
-          ./tmate -S /tmp/tmate.sock wait tmate-ready
-
-          echo "--- Tmate Connection Info ---"
-          # Display the connection info
-          echo "Web Shell URL:"
-          ./tmate -S /tmp/tmate.sock display -p '#{tmate_web}'
-          echo "SSH Connection:"
-          ./tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
-          echo "-----------------------------"
-
-          # Keep the runner alive for the duration of the timeout.
-          # The workflow will be cancelled after 60 minutes by `timeout-minutes`.
-          echo "Session is live. This job will remain active for up to 1 hour."
-          sleep 3600
+          # The installation script likely starts the agent as a background service.
+          # We need to keep the runner alive.
+          echo "Installation complete. Keeping runner alive for up to 6 hours."
+          echo "You should see this device appear in your remote.it dashboard."
+          # This sleep command will hold the job open. The job will be terminated
+          # by the `timeout-minutes` setting when the time is up.
+          sleep 21600
